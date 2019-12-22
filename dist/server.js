@@ -15,6 +15,8 @@ var _url = _interopRequireDefault(require("url"));
 
 var _util = _interopRequireDefault(require("util"));
 
+var _zlib = _interopRequireDefault(require("zlib"));
+
 var _mime = _interopRequireDefault(require("mime"));
 
 var _chalk = _interopRequireDefault(require("chalk"));
@@ -71,11 +73,33 @@ class Server {
     }
   }
 
+  gzip(req, res) {
+    // 拿到浏览器支持的压缩方式
+    let acceptEncoding = req.headers['accept-encoding']; // 判断是否支持压缩
+
+    if (acceptEncoding) {
+      if (acceptEncoding.indexOf('gzip') != -1) {
+        res.setHeader('Content-Encoding', 'gzip');
+        return _zlib.default.createGzip();
+      } else if (acceptEncoding.indexOf('deflate') != -1) {
+        res.setHeader('Content-Encoding', 'deflate');
+        return _zlib.default.createDeflate();
+      }
+    }
+
+    return false;
+  }
+
   sendFile(filePath, req, res, statObj) {
     res.statusCode = 200;
     res.setHeader('Content-Type', _mime.default.getType(filePath) + ';charset=utf-8');
+    let gunzip = this.gzip(req, res);
 
-    _fs.default.createReadStream(filePath).pipe(res);
+    if (gunzip) {
+      _fs.default.createReadStream(filePath).pipe(gunzip).pipe(res);
+    } else {
+      _fs.default.createReadStream(filePath).pipe(res);
+    }
   }
 
   sendError(e, req, res) {

@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import url from 'url';
 import util from 'util';
+import zlib from 'zlib';
+
 import mime from 'mime';
 import chalk from 'chalk';
 import ejs from 'ejs';
@@ -42,10 +44,31 @@ class Server {
     }
   }
 
+  gzip(req, res){
+    // 拿到浏览器支持的压缩方式
+    let acceptEncoding  = req.headers['accept-encoding'];
+    // 判断是否支持压缩
+    if(acceptEncoding ){
+      if(acceptEncoding.indexOf('gzip')!=-1){
+        res.setHeader('Content-Encoding', 'gzip');
+        return zlib.createGzip();
+      } else if(acceptEncoding.indexOf('deflate')!=-1){
+        res.setHeader('Content-Encoding', 'deflate');
+        return zlib.createDeflate();
+      }
+    }
+    return false;
+  }
+
   sendFile(filePath, req, res, statObj){
     res.statusCode = 200;
     res.setHeader('Content-Type', mime.getType(filePath) + ';charset=utf-8');
-    fs.createReadStream(filePath).pipe(res);
+    let gunzip = this.gzip(req, res);
+    if(gunzip){
+      fs.createReadStream(filePath).pipe(gunzip).pipe(res);
+    } else {
+      fs.createReadStream(filePath).pipe(res);
+    }
   }
 
   sendError(e, req, res){
@@ -54,6 +77,7 @@ class Server {
   }
 
   listen() {
+    
     let server = http.createServer(this.handleRequest.bind(this));
     server.listen(this.port, () => {
       console.log(`${chalk.yellow('Starting up http-server, serving')} ${chalk.blue('./')}
@@ -63,4 +87,5 @@ class Server {
     });
   }
 }
+
 export default Server;
