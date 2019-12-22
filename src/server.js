@@ -60,7 +60,31 @@ class Server {
     return false;
   }
 
+  cache(req, res, statObj){
+    // 获取文件最后修改时间
+    let lastModified = statObj.ctime.toUTCString();
+    // 设置last modified
+    res.setHeader("Last-Moodified", lastModified);
+    let ifModified = req.headers['if-modified-since'];
+    if(ifModified){
+      // 如果不相等或者不存在则重新读取
+      if(ifModified !== lastModified){
+        return false;
+      }
+    }
+    // 走缓存
+    return true;
+  }
+
   sendFile(filePath, req, res, statObj){
+    // 设置缓存
+    let isCache = this.cache(req, res, statObj);
+
+    if(isCache){
+      res.statusCode = 304;
+      return res.end();
+    }
+
     res.statusCode = 200;
     res.setHeader('Content-Type', mime.getType(filePath) + ';charset=utf-8');
     let gunzip = this.gzip(req, res);
