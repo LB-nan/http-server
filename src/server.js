@@ -4,6 +4,7 @@ import path from 'path';
 import url from 'url';
 import util from 'util';
 import zlib from 'zlib';
+import crypto from 'crypto';
 
 import mime from 'mime';
 import chalk from 'chalk';
@@ -60,25 +61,38 @@ class Server {
     return false;
   }
 
-  cache(req, res, statObj){
+  cache(filePath, req, res, statObj){
     // 获取文件最后修改时间
     let lastModified = statObj.ctime.toUTCString();
     // 设置last modified
     res.setHeader("Last-Moodified", lastModified);
+
+    // 设置Etag
+    let Etag = crypto.createHash('md5').update(fs.readFileSync(filePath)).digest('base64');
+    res.setHeader("Etag", Etag);
+
     let ifModified = req.headers['if-modified-since'];
-    if(ifModified){
-      // 如果不相等或者不存在则重新读取
-      if(ifModified !== lastModified){
-        return false;
-      }
+    let ifNoneMatch = req.headers['if-none-match'];
+
+    // 如果存在且相等，说明有缓存
+    if(ifNoneMatch && ifNoneMatch === Etag){
+      return true;
     }
-    // 走缓存
-    return true;
+
+    // 如果存在且相等，说明有缓存
+    if(ifModified && ifModified === lastModified){
+      return true;
+    }
+
+    // 没缓存
+    return false;
   }
 
   sendFile(filePath, req, res, statObj){
+    res.setHeader("Cache-Control", "max-age=3600");
+
     // 设置缓存
-    let isCache = this.cache(req, res, statObj);
+    let isCache = this.cache(filePath, req, res, statObj);
 
     if(isCache){
       res.statusCode = 304;
